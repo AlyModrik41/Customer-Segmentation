@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 import matplotlib.pyplot as plt
@@ -17,8 +16,11 @@ if uploaded_file is not None:
 
     # --- Let user choose columns to include ---
     st.write("Select columns to use for clustering (exclude Gender):")
-    feature_cols = st.multiselect("Features", options=[col for col in df.columns if col != 'Gender'], 
-                                  default=['Age','Annual Income (k$)'])
+    feature_cols = st.multiselect(
+        "Features",
+        options=[col for col in df.columns if col != 'Gender'],
+        default=['Age','Annual Income (k$)']
+    )
     
     if len(feature_cols) < 2:
         st.warning("Please select at least 2 features for clustering.")
@@ -37,7 +39,6 @@ if uploaded_file is not None:
             model = KMeans(n_clusters=n_clusters, random_state=42)
             model.fit(data_scaled)
             labels = model.labels_
-            st.write("Cluster labels:", labels)
 
         elif algorithm == "DBSCAN":
             eps = st.number_input("Epsilon (neighborhood size)", min_value=0.1, max_value=10.0, value=0.5, step=0.1)
@@ -45,26 +46,35 @@ if uploaded_file is not None:
             model = DBSCAN(eps=eps, min_samples=min_samples)
             model.fit(data_scaled)
             labels = model.labels_
-            st.write("Cluster labels:", labels)
 
         # --- Add cluster labels to dataframe ---
         df['Cluster'] = labels
+        st.write("Cluster labels added to data.")
 
-        # --- Show average spending, income, age per cluster ---
-        st.write("Average values per cluster:")
+        # --- Average Spending Score per cluster ---
+        if 'Spending Score (1-100)' in df.columns:
+            avg_spending = df.groupby('Cluster')['Spending Score (1-100)'].mean()
+            st.write("Average Spending Score per cluster:")
+            st.dataframe(avg_spending)
 
-        cluster_summary = df.groupby('Cluster')[['Spending Score (1-100)', 'Age', 'Annual Income (k$)']].mean()
-        st.dataframe(cluster_summary)
-
-# Plot simple bar charts for each feature
-        for col in cluster_summary.columns:
-            st.write(f"Average {col} per cluster:")
+            # Simple bar chart
             plt.figure(figsize=(6,4))
-            plt.bar(cluster_summary.index.astype(str), cluster_summary[col], color='skyblue')
+            plt.bar(avg_spending.index.astype(str), avg_spending.values, color='skyblue')
             plt.xlabel("Cluster")
-            plt.ylabel(f"Average {col}")
-            plt.title(f"Average {col} per Cluster")
+            plt.ylabel("Average Spending Score")
+            plt.title("Average Spending Score per Cluster")
             st.pyplot(plt)
+
+        # --- 2D Scatter Plot of clusters ---
+        if data_scaled.shape[1] >= 2:
+            plt.figure(figsize=(8,6))
+            plt.scatter(data_scaled[:,0], data_scaled[:,1], c=labels, cmap='viridis', s=50)
+            plt.xlabel(feature_cols[0])
+            plt.ylabel(feature_cols[1])
+            plt.title(f"{algorithm} Clustering")
+            plt.colorbar(label='Cluster')
+            st.pyplot(plt)
+
         # --- Save model option ---
         if st.button("Save Model"):
             joblib.dump(model, f"{algorithm}_model.pkl")
